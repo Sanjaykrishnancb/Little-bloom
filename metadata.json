@@ -1,0 +1,11 @@
+{
+  "name": "Little Bloom",
+  "description": "A private, family-friendly journal to track doctor visits, medicines, vaccines, growth milestones, and precious memories.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

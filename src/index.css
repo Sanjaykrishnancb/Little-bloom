@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Quicksand", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-theme-bg: #F4F7F6;
+  --color-theme-text: #3D424A;
+  --color-theme-heading: #2C3138;
+  --color-theme-muted: #8A919B;
+  
+  --color-theme-teal: #7FB5AD;
+  --color-theme-salmon: #E67E6E;
+  --color-theme-blue: #6799B1;
+  --color-theme-green: #718E71;
+  --color-theme-sand: #9B8C67;
+  
+  --color-theme-teal-light: #DDEEEB;
+  --color-theme-salmon-light: #FDF2F0;
+  --color-theme-blue-light: #EBF5F9;
+  --color-theme-green-light: #F2F7F2;
+  --color-theme-sand-light: #F9F6F0;
+}
+
+body {
+  @apply bg-theme-bg text-theme-text antialiased overflow-x-hidden;
+}
+
+::-webkit-scrollbar {
+  @apply w-1.5;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-theme-teal/30 rounded-full;
+}
+
