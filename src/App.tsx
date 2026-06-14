@@ -32,11 +32,14 @@ import {
   Sun,
   Moon,
   Sparkles,
-  Settings
+  Settings,
+  Briefcase,
+  Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { db, type Baby } from './db';
 import { Card, Button, Input } from './components/UI';
+import TravelAssistant from './components/TravelAssistant';
 import { format, differenceInMonths, isValid } from 'date-fns';
 import { cn } from './lib/utils';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -50,10 +53,10 @@ import {
 
 
 // --- Types ---
-type Screen = 'dashboard' | 'journal' | 'milestones' | 'medicines' | 'profile' | 'vaccines';
+type Screen = 'dashboard' | 'journal' | 'milestones' | 'medicines' | 'profile' | 'vaccines' | 'travel';
 
 // --- Dashboard Component ---
-const Dashboard = ({ baby }: { baby: Baby }) => {
+const Dashboard = ({ baby, onNavigate }: { baby: Baby; onNavigate: (screen: Screen) => void }) => {
   const ageInMonths = differenceInMonths(new Date(), new Date(baby.dob));
   const visits = useLiveQuery(() => db.doctorVisits.orderBy('date').reverse().limit(1).toArray()) || [];
   const medicines = useLiveQuery(() => db.medicines.where('isActive').equals(1).toArray()) || [];
@@ -337,6 +340,31 @@ const Dashboard = ({ baby }: { baby: Baby }) => {
             </div>
           </div>
           <ChevronRight size={24} className="text-theme-muted" />
+        </Card>
+
+        {/* Travel Packing Assistant Launcher Card */}
+        <Card 
+          onClick={() => onNavigate('travel')} 
+          className="col-span-2 flex items-center justify-between bg-gradient-to-br from-theme-blue-light/45 to-theme-teal-light/20 border-theme-blue/15 hover:bg-theme-blue-light/75 transition-all cursor-pointer shadow-sm hover:scale-[1.01] duration-150 py-5"
+          id="btn-dashboard-travel"
+        >
+          <div className="flex items-center gap-5 text-left">
+            <div className="p-3 bg-white text-theme-blue rounded-2xl shadow-sm relative shrink-0">
+              <Briefcase size={22} className="text-theme-blue" />
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-theme-teal opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-theme-teal"></span>
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-black text-theme-blue uppercase tracking-widest leading-none">Travel Prep</p>
+              <p className="text-base font-extrabold text-theme-heading mt-1 leading-tight">Travel Packing Lists</p>
+              <p className="text-xs text-theme-muted font-medium mt-0.5 leading-normal">
+                Smart age-adaptive lists, calculated diaper totals, weather items & PDF export
+              </p>
+            </div>
+          </div>
+          <ChevronRight size={20} className="text-theme-muted shrink-0" />
         </Card>
       </div>
 
@@ -2310,8 +2338,58 @@ const importBackupData = async (file: File, skipConfirm: boolean = false): Promi
   });
 };
 
+// --- Export Backup JSON Helper ---
+export const exportBackupData = async (baby: Baby) => {
+  try {
+    const data = {
+      version: 2,
+      app: "BabyJournal",
+      exportedAt: new Date().toISOString(),
+      data: {
+        babies: await db.babies.toArray(),
+        doctorVisits: await db.doctorVisits.toArray(),
+        medicines: await db.medicines.toArray(),
+        takenMedicines: await db.takenMedicines.toArray(),
+        vaccines: await db.vaccines.toArray(),
+        milestones: await db.milestones.toArray(),
+        memories: await db.memories.toArray(),
+        growthRecords: await db.growthRecords.toArray(),
+        teethBrushingLogs: await db.teethBrushingLogs.toArray(),
+        visitQuestions: await db.visitQuestions.toArray()
+      }
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.id = "download-backup-link";
+    link.href = url;
+    link.download = `${baby.name.toLowerCase().replace(/\s+/g, '_')}_journal_backup.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    // Save backup download timestamp
+    const now = new Date();
+    const formattedTime = now.toLocaleString();
+    localStorage.setItem(`last_automated_backup_time_${baby.id}`, formattedTime);
+
+    return true;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+};
+
 // --- Profile Screen ---
 const ProfileScreen = ({ baby, onLogout }: { baby: Baby, onLogout: () => void }) => {
+  const [lastBackupTime, setLastBackupTime] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLastBackupTime(localStorage.getItem(`last_automated_backup_time_${baby.id}`));
+  }, [baby.id]);
+
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -2336,38 +2414,48 @@ const ProfileScreen = ({ baby, onLogout }: { baby: Baby, onLogout: () => void })
 
   const handleExport = async () => {
     try {
-      const data = {
-        version: 2,
-        app: "BabyJournal",
-        exportedAt: new Date().toISOString(),
-        data: {
-          babies: await db.babies.toArray(),
-          doctorVisits: await db.doctorVisits.toArray(),
-          medicines: await db.medicines.toArray(),
-          takenMedicines: await db.takenMedicines.toArray(),
-          vaccines: await db.vaccines.toArray(),
-          milestones: await db.milestones.toArray(),
-          memories: await db.memories.toArray(),
-          growthRecords: await db.growthRecords.toArray(),
-          teethBrushingLogs: await db.teethBrushingLogs.toArray(),
-          visitQuestions: await db.visitQuestions.toArray()
-        }
-      };
-      
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.id = "download-backup-link";
-      link.href = url;
-      link.download = `${baby.name.toLowerCase().replace(/\s+/g, '_')}_journal_backup.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      await exportBackupData(baby);
       toast.success("Successfully downloaded data backup!");
+      setLastBackupTime(localStorage.getItem(`last_automated_backup_time_${baby.id}`));
+    } catch (error) {
+      toast.error("Failed to export data.");
+    }
+  };
+
+  const handlePDFExport = async () => {
+    try {
+      toast.info("Generating your PDF health report, please wait...");
+      
+      const doctorVisits = await db.doctorVisits.where('babyId').equals(baby.id!).toArray();
+      const medicines = await db.medicines.where('babyId').equals(baby.id!).toArray();
+      const vaccines = await db.vaccines.where('babyId').equals(baby.id!).toArray();
+      const milestones = await db.milestones.where('babyId').equals(baby.id!).toArray();
+      const growthRecords = await db.growthRecords.where('babyId').equals(baby.id!).toArray();
+      const visitQuestions = await db.visitQuestions.where('babyId').equals(baby.id!).toArray();
+      const teethBrushingLogs = await db.teethBrushingLogs.where('babyId').equals(baby.id!).toArray();
+
+      // Sort chronological records
+      doctorVisits.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      growthRecords.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      milestones.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      vaccines.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+      visitQuestions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      const { exportBabyJournalToPDF } = await import('./lib/pdfExport');
+      await exportBabyJournalToPDF(baby, {
+        doctorVisits,
+        medicines,
+        vaccines,
+        milestones,
+        growthRecords,
+        visitQuestions,
+        teethBrushingLogs
+      });
+      
+      toast.success("PDF health export downloaded successfully!");
     } catch (error) {
       console.error(error);
-      toast.error("Failed to export data.");
+      toast.error("Failed to generate PDF report.");
     }
   };
 
@@ -2441,6 +2529,42 @@ const ProfileScreen = ({ baby, onLogout }: { baby: Baby, onLogout: () => void })
             <div className="text-left">
               <span className="font-bold text-theme-text text-lg block animate-pulse">Download Data</span>
               <span className="text-xs text-theme-muted font-medium">Export all entries to a local JSON file</span>
+            </div>
+          </div>
+          <ChevronRight size={20} className="text-theme-muted" />
+        </Card>
+
+        {/* Daily Backup Info Panel */}
+        <div className="bg-emerald-50/65 border border-emerald-100 rounded-[2rem] p-5 flex items-start gap-4 shadow-sm">
+          <div className="p-2.5 bg-emerald-100 text-emerald-600 rounded-2xl mt-0.5 shrink-0">
+            <Clock size={18} className="animate-spin-slow" />
+          </div>
+          <div className="text-left flex-1 min-w-0">
+            <span className="font-bold text-emerald-900 text-sm block">Automated Daily Backup Active</span>
+            <span className="text-xs text-emerald-700/90 font-semibold block mt-1 leading-relaxed">
+              Your journal is backed up and downloaded automatically every day. If the app is closed or locked during our standard 11:00 PM - 11:59 PM block, the backup downloads immediately on next app load!
+            </span>
+            <div className="mt-2.5 bg-emerald-100/60 rounded-xl px-3 py-2 border border-emerald-200/40 flex items-center justify-between">
+              <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider">Status:</span>
+              <span className="text-xs font-bold text-emerald-950">
+                {lastBackupTime ? `Saved & Downloaded (${lastBackupTime})` : "Pending first download"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <Card 
+          onClick={handlePDFExport}
+          className="flex items-center justify-between p-6 cursor-pointer hover:bg-slate-50 transition-colors border-none shadow-sm"
+          id="card-export-pdf"
+        >
+          <div className="flex items-center gap-5">
+            <div className="p-3 bg-theme-blue-light text-theme-blue rounded-2xl">
+              <FileText size={22} />
+            </div>
+            <div className="text-left">
+              <span className="font-bold text-theme-text text-lg block">Export Health PDF</span>
+              <span className="text-xs text-theme-muted font-medium">Generate a beautifully formatted health & milestone PDF report</span>
             </div>
           </div>
           <ChevronRight size={20} className="text-theme-muted" />
@@ -3245,6 +3369,46 @@ export default function App() {
     }
   }, [babies]);
 
+  useEffect(() => {
+    if (!currentBaby) return;
+
+    const checkAndTriggerBackup = async (isOnLoad = false) => {
+      const now = new Date();
+      const hours = now.getHours();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const lastBackupStr = localStorage.getItem(`last_automated_backup_date_${currentBaby.id}`);
+      
+      // Trigger if it's the 11 PM hour block (23) OR if it is loading and we haven't successfully downloaded today's backup yet
+      const shouldBackup = (hours === 23) || (isOnLoad && lastBackupStr !== todayStr);
+
+      if (shouldBackup && lastBackupStr !== todayStr) {
+        try {
+          // Set first to prevent double-firing in the same hour or rapid consecutive loads
+          localStorage.setItem(`last_automated_backup_date_${currentBaby.id}`, todayStr);
+          
+          await exportBackupData(currentBaby);
+          const feedbackMsg = isOnLoad 
+            ? `Backup completed on startup! Your local daily backup for ${currentBaby.name} is saved and downloaded.`
+            : `Daily Auto-Backup for ${currentBaby.name} completed and downloaded successfully!`;
+            
+          toast.success(feedbackMsg, {
+            duration: 8000
+          });
+        } catch (err) {
+          console.error("Auto-backup failed:", err);
+          // Clear on failure so it can retry
+          localStorage.removeItem(`last_automated_backup_date_${currentBaby.id}`);
+        }
+      }
+    };
+
+    // Run custom check immediately on startup (isOnLoad = true), then check every hour (3600000 ms)
+    checkAndTriggerBackup(true);
+    const intervalId = setInterval(() => checkAndTriggerBackup(false), 3600000);
+
+    return () => clearInterval(intervalId);
+  }, [currentBaby]);
+
   const handleLogout = async () => {
     setShowResetConfirm(true);
   };
@@ -3274,12 +3438,13 @@ export default function App() {
             transition={{ duration: 0.3 }}
             className="h-full"
           >
-            {activeScreen === 'dashboard' && <Dashboard baby={currentBaby} />}
+            {activeScreen === 'dashboard' && <Dashboard baby={currentBaby} onNavigate={setActiveScreen} />}
             {activeScreen === 'journal' && <JournalScreen babyId={currentBaby.id!} />}
             {activeScreen === 'medicines' && <MedicineScreen babyId={currentBaby.id!} />}
             {activeScreen === 'vaccines' && <VaccineScreen babyId={currentBaby.id!} babyDob={currentBaby.dob} />}
             {activeScreen === 'milestones' && <MilestonesScreen babyId={currentBaby.id!} />}
             {activeScreen === 'profile' && <ProfileScreen baby={currentBaby} onLogout={handleLogout} />}
+            {activeScreen === 'travel' && <TravelAssistant baby={currentBaby} onBack={() => setActiveScreen('dashboard')} />}
           </motion.div>
         </AnimatePresence>
       </main>
